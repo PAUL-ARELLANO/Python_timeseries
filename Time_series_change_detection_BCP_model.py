@@ -42,22 +42,28 @@ def preprocess_ndvi(ndvi_series):
 def fit_bcp_model(data):
     """Apply Bayesian Change-Point analysis to detect NDVI shifts."""
     if "ndvi" not in data.columns or "day" not in data.columns:
-        return {"change_point": np.nan, "x_value": np.nan}
+        return {"change_point": -999}
 
     # Preprocess NDVI values
     data["ndvi"] = preprocess_ndvi(data["ndvi"])
 
     # Apply Bayesian Change-Point Model using PELT from 'ruptures'
-    algo = rpt.Pelt(model="rbf").fit(data["ndvi"].values)
-    breakpoints = algo.predict(pen=5)  # Adjust penalty for better detection
+    algo = rpt.Pelt(model="rbf").fit(data["ndvi"].values) # The PELT (Pruned Exact Linear Time) algorithm from the ruptures package is used to find structural shifts in NDVI trends.
+    # The model type "rbf" (Radial Basis Function) is used, which is well-suited for detecting change points in noisy signals.
+    breakpoints = algo.predict(pen=5)  # Adjust penalty (sensitivity) for better detection. Higher values make conservative detections, lower values allow more frequently detections.
 
-    # Extract first detected change point
-    if not breakpoints or breakpoints[0] >= len(data["day"]):
-        return {"change_point": np.nan, "x_value": np.nan}
+    # Handle case where no change points are detected
+    if not breakpoints:
+        return {"change_point": -999}
 
-    change_point = data["day"].iloc[breakpoints[0]]
-    return {"change_point": change_point, "x_value": change_point}
+    # Handle case where multiple change points are detected
+    change_points = data["day"].iloc[breakpoints[:-1]]  # Exclude last point as 'ruptures' includes an endpoint
+    result = {"num_change_points": len(change_points)}
 
+    for i, cp in enumerate(change_points):
+        result[f"change_point_{i+1}"] = cp
+
+    return result
 # ============================================================
 # 5. Process Multiple NDVI Datasets
 # ============================================================
